@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6f9; padding: 20px; color: #333; }
+      .container { max-width: 650px; margin: auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+      h2 { color: #1a73e8; margin-top: 0; }
+      .form-group { margin-bottom: 15px; }
+      label { display: block; font-weight: 600; margin-bottom: 5px; font-size: 0.9em; }
+      input[type="text"], input[type="date"], input[type="email"], select { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+      select { background: white; cursor: pointer; }
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+      
+      .milestone-section { margin-top: 25px; border-top: 2px solid #e0e0e0; padding-top: 15px; }
+      .milestone-card { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #fafafa; border: 1px solid #eee; margin-bottom: 6px; border-radius: 4px; }
+      .milestone-card.passed { background: #fff3cd; border-color: #ffeeba; opacity: 0.85; }
+      .milestone-info { display: flex; align-items: center; gap: 10px; flex-grow: 1; }
+      .tag { font-size: 0.75em; padding: 2px 6px; border-radius: 4px; background: #e8f0fe; color: #1a73e8; font-weight: bold; }
+      .tag.cd { background: #fce8e6; color: #c5221f; }
+      
+      .custom-builder { display: flex; gap: 10px; margin-top: 10px; align-items: center; }
+      .custom-builder input[type="text"] { flex-grow: 1; }
+      .custom-builder input[type="number"] { width: 110px; }
+      .custom-builder label { margin: 0; font-size: 0.85em; font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+
+      button.btn-primary { width: 100%; padding: 12px; background: #1a73e8; color: white; border: none; border-radius: 4px; font-weight: bold; font-size: 1em; cursor: pointer; margin-top: 20px; }
+      button.btn-primary:hover { background: #1557b0; }
+      button.btn-secondary { background: #5f6368; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+      #status { margin-top: 15px; font-weight: bold; text-align: center; }
+
+      /* Summary Box Styling */
+      #summaryContainer { display: none; margin-top: 20px; border-top: 2px dashed #1a73e8; padding-top: 15px; }
+      #summaryText { width: 100%; height: 160px; font-family: monospace; font-size: 0.85em; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; background: #fdfdfd; resize: vertical; }
+      #copyBtn { width: 100%; margin-top: 8px; background: #34a853; color: white; font-weight: bold; padding: 10px; border: none; border-radius: 4px; cursor: pointer; }
+      #copyBtn:hover { background: #2d9247; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>RA Event Backward Planner</h2>
+      
+      <div class="form-group">
+        <label for="schedulePreset">Select Timeline Schedule Preset</label>
+        <select id="schedulePreset" onchange="loadPresetSchedule()">
+          <option value="scheduleA">Schedule Preset A</option>
+          <option value="scheduleB">Schedule Preset B</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="eventTitle">Event Title</label>
+        <input type="text" id="eventTitle" placeholder="e.g., Floor Boba Social" required>
+      </div>
+
+      <div class="form-group">
+        <label for="eventDate">Main Event Date</label>
+        <input type="date" id="eventDate" onchange="handleDateChange()" required>
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label for="cohosts">Co-Host Emails (comma separated)</label>
+          <input type="text" id="cohosts" placeholder="ra1@plu.edu, ra2@plu.edu">
+        </div>
+        <div class="form-group">
+          <label for="cdEmail">CD Email (for meetings/reviews)</label>
+          <input type="email" id="cdEmail" placeholder="cd@plu.edu">
+        </div>
+      </div>
+
+      <div class="milestone-section">
+        <h3>Timeline & Milestones</h3>
+        <p style="font-size: 0.85em; color: #666;">
+          Items highlighted in yellow are past-due based on your date. If selected, they will be scheduled for <strong>today</strong> so you get immediate reminders.
+        </p>
+        
+        <div id="milestoneList"></div>
+
+        <h4 style="margin-top: 20px; margin-bottom: 5px;">Add Custom Milestone & Associated Week(s) Before</h4>
+        <div class="custom-builder">
+          <input type="text" id="customTitle" placeholder="Milestone description">
+          <input type="number" id="customWeeks" placeholder="Weeks before" value="1" step="0.1">
+          <label for="customCdInvolved">
+            <input type="checkbox" id="customCdInvolved"> Invite CD
+          </label>
+          <button type="button" class="btn-secondary" onclick="addCustomMilestone()">Add</button>
+        </div>
+      </div>
+
+      <button class="btn-primary" onclick="submitPlanner()">Add to Google Calendar</button>
+      <div id="status"></div>
+
+      <!-- Copy-Pasteable Output Area -->
+      <div id="summaryContainer">
+        <label for="summaryText"><strong>Copy-Pasteable Event Planning List:</strong></label>
+        <textarea id="summaryText" readonly></textarea>
+        <button type="button" id="copyBtn" onclick="copySummaryText()">Copy List to Clipboard</button>
+      </div>
+    </div>
+
+    <script>
+      const scheduleA = [
+        { title: "Space Reserved", offsetDays: 42, cdInvolved: false },
+        { title: "Catering and Tech Needs Determined", offsetDays: 42, cdInvolved: false },
+        { title: "Event Planning Form Completed", offsetDays: 28, cdInvolved: false },
+        { title: "Planning Roles Assigned", offsetDays: 28, cdInvolved: false },
+        { title: "Event Listed on Campus Calendar", offsetDays: 28, cdInvolved: false },
+        { title: "Catering and Tech Needs Finalized", offsetDays: 28, cdInvolved: false },
+        { title: "Schedule Initial Planning Meeting with CD", offsetDays: 28, cdInvolved: true },
+        { title: "Purchase Request Drafted", offsetDays: 21, cdInvolved: false },
+        { title: "Flyer Drafted & CD Feedback Requested", offsetDays: 21, cdInvolved: true },
+        { title: "Purchase Request Finalized, Items Ordered", offsetDays: 14, cdInvolved: false },
+        { title: "Flyer Finalized and Distributed", offsetDays: 14, cdInvolved: false },
+        { title: "Educational Materials Drafted", offsetDays: 14, cdInvolved: false },
+        { title: "Schedule Final Planning Meeting with CD", offsetDays: 14, cdInvolved: true },
+        { title: "Educational Materials Finalized", offsetDays: 7, cdInvolved: false },
+        { title: "Day-Of Roles Assigned", offsetDays: 7, cdInvolved: false },
+        { title: "CDM Evaluation Due", offsetDays: -7, cdInvolved: false }
+      ];
+
+      const scheduleB = [
+        { title: "EPF Draft Finalized", offsetDays: 42, cdInvolved: false },
+        { title: "Planning Roles Assigned", offsetDays: 42, cdInvolved: false },
+        { title: "Space Reserved", offsetDays: 42, cdInvolved: false },
+        { title: "Schedule Initial Planning Meeting with CD", offsetDays: 42, cdInvolved: true },
+        { title: "Event Planning Form Completed", offsetDays: 28, cdInvolved: false },
+        { title: "Catering and Tech Needs Determined", offsetDays: 28, cdInvolved: false },
+        { title: "Event Listed on Campus Calendar", offsetDays: 28, cdInvolved: false },
+        { title: "Catering and Tech Needs Finalized", offsetDays: 28, cdInvolved: false },
+        { title: "Purchase Request Drafted", offsetDays: 21, cdInvolved: false },
+        { title: "Flyer Drafted & CD Feedback Requested", offsetDays: 21, cdInvolved: true },
+        { title: "Schedule Check-In Planning Meeting with CD", offsetDays: 21, cdInvolved: true },
+        { title: "Purchase Request Finalized, Items Ordered", offsetDays: 14, cdInvolved: false },
+        { title: "Flyer Finalized and Distributed", offsetDays: 14, cdInvolved: false },
+        { title: "Educational Materials Drafted", offsetDays: 14, cdInvolved: false },
+        { title: "Day-Of Roles Assigned", offsetDays: 14, cdInvolved: false },
+        { title: "Educational Materials Finalized", offsetDays: 7, cdInvolved: false },
+        { title: "Schedule Final Planning Meeting with CD", offsetDays: 7, cdInvolved: true },
+        { title: "CDM Evaluation Due", offsetDays: -7, cdInvolved: false }
+      ];
+
+      let currentMilestones = [];
+
+      function loadPresetSchedule() {
+        const selectedValue = document.getElementById('schedulePreset').value;
+        const sourceSchedule = selectedValue === 'scheduleA' ? scheduleA : scheduleB;
+
+        currentMilestones = JSON.parse(JSON.stringify(sourceSchedule));
+        currentMilestones.sort((a, b) => b.offsetDays - a.offsetDays);
+        renderMilestones();
+      }
+
+      function formatWeekLabel(item) {
+        const weeksVal = item.offsetWeeks !== undefined ? item.offsetWeeks : (item.offsetDays / 7);
+
+        if (weeksVal === 0) return "Event Day";
+        
+        const isAfter = weeksVal < 0;
+        const absWeeks = Math.abs(weeksVal);
+
+        return `${absWeeks} ${absWeeks === 1 ? 'week' : 'weeks'} ${isAfter ? 'after' : 'prior'}`;
+      }
+
+      function syncCheckedStates() {
+        currentMilestones.forEach((item, index) => {
+          const checkbox = document.getElementById(`ms-${index}`);
+          if (checkbox) {
+            item.checked = checkbox.checked;
+          }
+        });
+      }
+
+      function handleDateChange() {
+        currentMilestones.forEach(item => delete item.checked);
+        renderMilestones();
+      }
+
+      function renderMilestones() {
+        const dateInput = document.getElementById('eventDate').value;
+        const listContainer = document.getElementById('milestoneList');
+        listContainer.innerHTML = '';
+
+        const today = new Date();
+        today.setHours(0,0,0,0);
+
+        let eventDate = dateInput ? new Date(dateInput + "T00:00:00") : null;
+
+        currentMilestones.forEach((item, index) => {
+          let isPassed = false;
+          let calculatedDateStr = "";
+
+          if (eventDate) {
+            let remDate = new Date(eventDate);
+            remDate.setDate(eventDate.getDate() - item.offsetDays);
+            calculatedDateStr = remDate.toLocaleDateString();
+            if (remDate < today) {
+              isPassed = true;
+            }
+          }
+
+          const isChecked = (item.checked !== undefined) ? item.checked : !isPassed;
+
+          const card = document.createElement('div');
+          card.className = `milestone-card ${isPassed ? 'passed' : ''}`;
+          
+          const cdTag = item.cdInvolved ? '<span class="tag cd">CD Invited</span>' : '';
+          const timingLabel = formatWeekLabel(item);
+
+          card.innerHTML = `
+            <div class="milestone-info">
+              <input type="checkbox" id="ms-${index}" ${isChecked ? 'checked' : ''} onchange="updateItemCheck(${index}, this.checked)">
+              <label for="ms-${index}" style="margin:0; font-weight:normal; cursor:pointer;">
+                <strong>${item.title}</strong> 
+                <small style="color:#666;">(${timingLabel} ${calculatedDateStr ? '— ' + calculatedDateStr : ''})</small>
+              </label>
+            </div>
+            ${cdTag}
+          `;
+          listContainer.appendChild(card);
+        });
+      }
+
+      function updateItemCheck(index, isChecked) {
+        currentMilestones[index].checked = isChecked;
+      }
+
+      function addCustomMilestone() {
+        const title = document.getElementById('customTitle').value;
+        const weeks = parseFloat(document.getElementById('customWeeks').value);
+        const cdInvolved = document.getElementById('customCdInvolved').checked;
+
+        if (!title || isNaN(weeks)) return;
+
+        syncCheckedStates();
+
+        const offsetDays = Math.round(weeks * 7);
+
+        currentMilestones.push({
+          title: title,
+          offsetDays: offsetDays,
+          offsetWeeks: weeks,
+          cdInvolved: cdInvolved
+        });
+
+        currentMilestones.sort((a, b) => b.offsetDays - a.offsetDays);
+
+        document.getElementById('customTitle').value = '';
+        document.getElementById('customCdInvolved').checked = false;
+        renderMilestones();
+      }
+
+      function submitPlanner() {
+        const title = document.getElementById('eventTitle').value;
+        const date = document.getElementById('eventDate').value;
+
+        if (!title || !date) {
+          alert('Please fill in the Event Title and Date.');
+          return;
+        }
+
+        const selectedMilestones = [];
+        currentMilestones.forEach((item, index) => {
+          const checkbox = document.getElementById(`ms-${index}`);
+          if (checkbox && checkbox.checked) {
+            selectedMilestones.push(item);
+          }
+        });
+
+        const payload = {
+          eventTitle: title,
+          eventDate: date,
+          cohosts: document.getElementById('cohosts').value,
+          cdEmail: document.getElementById('cdEmail').value,
+          selectedMilestones: selectedMilestones
+        };
+
+        document.getElementById('status').style.color = "#333";
+        document.getElementById('status').innerText = "Generating calendar events...";
+        document.getElementById('summaryContainer').style.display = "none";
+
+        google.script.run
+          .withSuccessHandler(function(res) {
+            document.getElementById('status').style.color = "green";
+            document.getElementById('status').innerText = res.message;
+
+            // Populate and reveal summary box
+            document.getElementById('summaryText').value = res.summaryText;
+            document.getElementById('summaryContainer').style.display = "block";
+          })
+          .withFailureHandler(function(err) {
+            document.getElementById('status').style.color = "red";
+            document.getElementById('status').innerText = "Error: " + err.message;
+          })
+          .processMilestones(payload);
+      }
+
+      function copySummaryText() {
+        const textarea = document.getElementById("summaryText");
+        textarea.select();
+        textarea.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(textarea.value);
+        
+        const btn = document.getElementById("copyBtn");
+        btn.innerText = "✓ Copied to Clipboard!";
+        setTimeout(() => { btn.innerText = "Copy List to Clipboard"; }, 2500);
+      }
+
+      loadPresetSchedule();
+    </script>
+  </body>
+</html>
